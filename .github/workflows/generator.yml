@@ -76,14 +76,14 @@ jobs:
           path: vcpkg
 
       - name: vcpkg disable metrics
-        WORKING_DIRECTORY: vcpkg
+        working-directory: vcpkg
         env:
           VCPKG_ROOT: ${{ github.workspace }}/vcpkg
         run: |
           sh bootstrap-vcpkg.sh -disableMetrics
 
       - name: vcpkg install
-        WORKING_DIRECTORY: rustdesk
+        working-directory: rustdesk
         env:
           VCPKG_ROOT: ${{ github.workspace }}/vcpkg
         run: |
