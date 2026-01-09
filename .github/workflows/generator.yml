@@ -1,0 +1,110 @@
+name: "Generator"
+on:
+  workflow_dispatch:
+    inputs:
+      RUSTDESK_TAG:
+        description: "rustdesk tag"
+        required: true
+      VCPKG_TAG:
+        description: "vcpkg tag"
+        required: true
+
+jobs:
+  Generator:
+    permissions: write-all # required by push tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: delete old tag
+        run: |
+          git config --global --add safe.directory '*'
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git tag --delete ${{ inputs.RUSTDESK_TAG }} || echo yes
+
+      - name: install depends
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+                        build-essential \
+                        clang \
+                        curl \
+                        gcc \
+                        git \
+                        g++ \
+                        libayatana-appindicator3-dev \
+                        libasound2-dev \
+                        libclang-dev \
+                        libdbus-1-dev \
+                        libglib2.0-dev \
+                        libgstreamer1.0-dev \
+                        libgstreamer-plugins-base1.0-dev \
+                        libgtk-3-dev \
+                        liblzma-dev \
+                        libpam0g-dev \
+                        libpulse-dev \
+                        libva-dev \
+                        libxcb-randr0-dev \
+                        libxcb-shape0-dev \
+                        libxcb-xfixes0-dev \
+                        libxdo-dev \
+                        libxfixes-dev \
+                        ninja-build \
+                        pkg-config \
+                        python3 \
+                        rpm \
+                        unzip \
+                        wget \
+                        nasm \
+                        xz-utils \
+                        autoconf \
+                        automake \
+                        libtool \
+                        zip
+
+      - uses: actions/checkout@v6
+        with:
+          repository: rustdesk/rustdesk
+          ref: ${{ inputs.RUSTDESK_TAG }}
+          path: rustdesk
+
+      - uses: actions/checkout@v6
+        with:
+          repository: microsoft/vcpkg
+          ref: ${{ inputs.VCPKG_TAG }}
+          path: vcpkg
+
+      - name: vcpkg disable metrics
+        WORKING_DIRECTORY: vcpkg
+        env:
+          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+        run: |
+          sh bootstrap-vcpkg.sh -disableMetrics
+
+      - name: vcpkg install
+        WORKING_DIRECTORY: rustdesk
+        env:
+          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+        run: |
+          $VCPKG_ROOT/vcpkg install --triplet x64-linux --x-install-root="$VCPKG_ROOT/installed"
+
+      - name: create tarball
+        run: |
+          rm -rf vcpkg/{.git,downloads,buildtrees}
+          tar czf rustdesk-${{ inputs.RUSTDESK_TAG }}-vcpkg-${{ inputs.VCPKG_TAG }}-lite.tar.gz vcpkg
+
+
+      - name: push tag
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          force: true
+          tags: true
+
+      - name: upload dart repack to release artifaces
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            rustdesk-${{ inputs.RUSTDESK_TAG }}-vcpkg-${{ inputs.VCPKG_TAG }}-lite.tar.gz
+          tag_name: ${{ inputs.RUSTDESK_TAG }}
