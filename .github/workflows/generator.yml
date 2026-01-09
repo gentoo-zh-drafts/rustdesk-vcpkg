@@ -79,12 +79,14 @@ jobs:
           path: vcpkg
           submodules: true
 
-      - name: vcpkg disable metrics
+      - name: vcpkg configure
         working-directory: vcpkg
         env:
           VCPKG_ROOT: ${{ github.workspace }}/vcpkg
         run: |
           sh bootstrap-vcpkg.sh -disableMetrics
+          # https://learn.microsoft.com/en-us/vcpkg/users/versioning-troubleshooting?WT.mc_id=vcpkg_inproduct_cli#shallow-clone-version-constraint
+          git fetch --unshallow
 
       - name: vcpkg install
         working-directory: rustdesk
