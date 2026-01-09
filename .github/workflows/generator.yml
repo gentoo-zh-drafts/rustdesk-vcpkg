@@ -63,17 +63,21 @@ jobs:
                         libtool \
                         zip
 
-      - uses: actions/checkout@v6
+      - name: checkout rustdesk
+        uses: actions/checkout@v6
         with:
           repository: rustdesk/rustdesk
           ref: ${{ inputs.RUSTDESK_TAG }}
           path: rustdesk
+          submodules: true
 
-      - uses: actions/checkout@v6
+      - name: checkout vcpkg
+        uses: actions/checkout@v6
         with:
           repository: microsoft/vcpkg
           ref: ${{ inputs.VCPKG_TAG }}
           path: vcpkg
+          submodules: true
 
       - name: vcpkg disable metrics
         working-directory: vcpkg
