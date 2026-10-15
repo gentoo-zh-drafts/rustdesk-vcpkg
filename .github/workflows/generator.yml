@@ -63,6 +63,24 @@ jobs:
                         libtool \
                         zip
 
+      # vcpkg's z_vcpkg_spdx.cmake uses string(JSON ... STRING_ENCODE), which
+      # needs CMake 4.3 or newer. vcpkg fetches its own CMake on x86_64 but not
+      # on aarch64, where it falls back to the 3.31 in the runner image and the
+      # aom build dies. Install the same version for both so neither depends on
+      # what the image happens to ship.
+      - name: install cmake
+        run: |
+          case "$(uname -m)" in
+            x86_64) arch=x86_64 ;;
+            aarch64) arch=aarch64 ;;
+            *) echo "unexpected $(uname -m)" >&2; exit 1 ;;
+          esac
+          url=https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-${arch}.tar.gz
+          curl -fsSL "$url" | sudo tar xz -C /opt
+          echo "/opt/cmake-${CMAKE_VERSION}-linux-${arch}/bin" >> "$GITHUB_PATH"
+        env:
+          CMAKE_VERSION: "4.4.0"
+
       - name: checkout rustdesk
         uses: actions/checkout@v6
         with:
