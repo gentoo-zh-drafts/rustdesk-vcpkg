@@ -56,16 +56,12 @@ jobs:
                         rpm \
                         unzip \
                         wget \
+                        nasm \
                         xz-utils \
                         autoconf \
                         automake \
                         libtool \
                         zip
-
-      # nasm is an x86 assembler and has no aarch64 package.
-      - name: install nasm
-        if: matrix.triplet == 'x64-linux'
-        run: sudo apt-get install -y nasm
 
       - name: checkout rustdesk
         uses: actions/checkout@v6
