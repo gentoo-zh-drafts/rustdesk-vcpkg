@@ -11,17 +11,17 @@ on:
 
 jobs:
   Generator:
-    permissions: write-all # required by push tag
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            triplet: x64-linux
+          - runner: ubuntu-24.04-arm
+            triplet: arm64-linux
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
-
-      - name: delete old tag
-        run: |
-          git config --global --add safe.directory '*'
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
-          git tag --delete ${{ inputs.RUSTDESK_TAG }} || echo yes
 
       - name: install depends
         run: |
@@ -56,12 +56,16 @@ jobs:
                         rpm \
                         unzip \
                         wget \
-                        nasm \
                         xz-utils \
                         autoconf \
                         automake \
                         libtool \
                         zip
+
+      # nasm is an x86 assembler and has no aarch64 package.
+      - name: install nasm
+        if: matrix.triplet == 'x64-linux'
+        run: sudo apt-get install -y nasm
 
       - name: checkout rustdesk
         uses: actions/checkout@v6
@@ -93,13 +97,41 @@ jobs:
         env:
           VCPKG_ROOT: ${{ github.workspace }}/vcpkg
         run: |
-          $VCPKG_ROOT/vcpkg install --triplet x64-linux --x-install-root="$VCPKG_ROOT/installed"
+          $VCPKG_ROOT/vcpkg install --triplet ${{ matrix.triplet }} --x-install-root="$VCPKG_ROOT/installed"
 
       - name: create tarball
         run: |
           rm -rf vcpkg/{.git,downloads,buildtrees}
-          tar czf rustdesk-${{ inputs.RUSTDESK_TAG }}-vcpkg-${{ inputs.VCPKG_TAG }}-lite.tar.gz vcpkg
+          tar czf rustdesk-${{ inputs.RUSTDESK_TAG }}-vcpkg-${{ inputs.VCPKG_TAG }}-${{ matrix.triplet }}-lite.tar.gz vcpkg
 
+      - name: upload tarball for the release job
+        uses: actions/upload-artifact@v4
+        with:
+          name: vcpkg-${{ matrix.triplet }}
+          path: rustdesk-${{ inputs.RUSTDESK_TAG }}-vcpkg-${{ inputs.VCPKG_TAG }}-${{ matrix.triplet }}-lite.tar.gz
+          retention-days: 1
+
+  # One release job, so the two architectures cannot race each other while
+  # moving the tag and creating the release.
+  Release:
+    needs: Generator
+    permissions: write-all # required by push tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: delete old tag
+        run: |
+          git config --global --add safe.directory '*'
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git tag --delete ${{ inputs.RUSTDESK_TAG }} || echo yes
+
+      - name: download tarballs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: vcpkg-*
+          merge-multiple: true
 
       - name: push tag
         uses: ad-m/github-push-action@master
@@ -108,9 +140,10 @@ jobs:
           force: true
           tags: true
 
-      - name: upload dart repack to release artifaces
+      - name: upload to release artifacts
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            rustdesk-${{ inputs.RUSTDESK_TAG }}-vcpkg-${{ inputs.VCPKG_TAG }}-lite.tar.gz
+            rustdesk-${{ inputs.RUSTDESK_TAG }}-vcpkg-${{ inputs.VCPKG_TAG }}-x64-linux-lite.tar.gz
+            rustdesk-${{ inputs.RUSTDESK_TAG }}-vcpkg-${{ inputs.VCPKG_TAG }}-arm64-linux-lite.tar.gz
           tag_name: ${{ inputs.RUSTDESK_TAG }}
